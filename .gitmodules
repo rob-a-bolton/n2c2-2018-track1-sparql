@@ -1,0 +1,6 @@
+[submodule "n2c22018t12sql"]
+	path = n2c22018t12sql
+	url = https://github.com/rob-a-bolton/n2c22018t12sql.git
+[submodule "ann2sql"]
+	path = ann2sql
+	url = https://github.com/rob-a-bolton/ann2sql.git
