@@ -245,15 +245,38 @@ SPARQL
 }
 
 function run_rml {
-  get_rmlmapper
-  setup_db_con_str
-  java -jar ${RML_JAR} \
-       -m ${ROOTDIR}/rml/n2c2-train.ttl \
-       -o ${ROOTDIR}/rml-output/n2c2-train.ttl \
-       -s turtle \
-       -dsn "jdbc:postgres://localhost/${DBNAME}" \
-       -u ${USER} \
-       -p ${PASS}
+  test_sparql_endpoints
+  if [[ -z ${CLEAN} ]]; then
+    get_rmlmapper
+    setup_db_con_str
+    echo 'Running RML export'
+    java -jar ${RML_JAR} \
+         -m ${ROOTDIR}/rml/n2c2-train.ttl \
+         -o ${ROOTDIR}/rml-output/n2c2-train.ttl \
+         -s turtle \
+         -dsn "jdbc:postgres://localhost/${DBNAME}" \
+         -u ${USER} \
+         -p ${PASS}
+    # Substitute "f" and "t" for "true" and "false"
+    sed -i 's/"f"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/"false"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/g;s/"t"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/"true"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/g' ${ROOTDIR}/rml-output/n2c2-train.ttl
+    echo 'Uploading RML output graph'
+    upload_ontology 'https://n2c2.localhost/datasets/n2c2-train/' ${ROOTDIR}/rml-output/n2c2-train.ttl 
+  else
+    if [[ -f ${ROOTDIR}/rml-output/n2c2-train.ttl ]]; then
+      echo 'Clearing rml output file'
+      rm ${ROOTDIR}/rml-output/n2c2-train.ttl
+    fi
+    echo 'Clearing rml output graph from RDF store'
+    STATUS=$(curl "${SPARQL_ENDPOINT}/update" \
+        ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+        -H "${SPARQL_UPDATE_HEADER}" \
+        -so /dev/null \
+        -w '%{http_code}' \
+        -d "DROP SILENT GRAPH <https://n2c2.localhost/datasets/n2c2-train/>")
+    if [[ ${STATUS} -ne 200 ]]; then
+      failsafe 'Could not delete n2c2-train graph from RDF store'
+    fi
+  fi
 }
 
 while getopts ':hlcu:p:d:m:o:s:a:' OPTION; do

@@ -98,7 +98,7 @@
   ];
   rr:predicateObjectMap [
     rr:predicate n2c2:has_date;
-    rr:objectMap [ rr:column "date"; rr:datatype xsd:dateTime ];
+    rr:objectMap [ rr:column "date"; rr:datatype xsd:date ];
   ];
   rr:predicateObjectMap [
     rr:predicate n2c2:has_annotation;
