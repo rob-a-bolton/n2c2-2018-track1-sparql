@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# TODO: Do not CD until after args processed so relative dirs can be set correctly
 ROOTDIR="$(dirname $(readlink -f $0))"
 
 function print_usage {
