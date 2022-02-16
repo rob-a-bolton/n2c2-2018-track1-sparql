@@ -1,7 +1,7 @@
 #!/bin/bash
 
-cd "$(dirname $(readlink -f $0))"
-ROOTDIR="$(pwd)"
+# TODO: Do not CD until after args processed so relative dirs can be set correctly
+ROOTDIR="$(dirname $(readlink -f $0))"
 
 function print_usage {
   echo "./run.sh [OPTIONS] [ACTION]
@@ -51,7 +51,8 @@ function print_usage {
 MEDCAT_ENDPOINT='http://127.0.0.1:5000/api/process_bulk'
 SPARQL_QUERY_HEADER='Content-Type: application/sparql-query'
 SPARQL_UPDATE_HEADER='Content-Type: application/sparql-update'
-ONTOLOGY_DIR='./ontologies'
+ONTOLOGY_DIR="${ROOTDIR}/ontologies"
+DATA_DIR="${ROOTDIR}/data"
 
 function cleanup {
   if [[ -f PGPASS ]]; then
@@ -66,7 +67,7 @@ function failsafe {
 }
 
 function check_data_exists {
-  if ! [[ -d ./data/train ]] || ! [[ -d ./data/n2c2-t1_gold_standard_test_data/n2c2-t1_gold_standard_test_data/test ]]; then
+  if ! [[ -d ${DATA_DIR}/train ]] || ! [[ -d ${DATA_DIR}/n2c2-t1_gold_standard_test_data/n2c2-t1_gold_standard_test_data/test ]]; then
     failsafe 'Could not locate n2c2 data, exiting'
   fi
 }
@@ -124,13 +125,13 @@ function run_sql {
   setup_db_con_str
   if [[ -z "${CLEAN}" ]]; then
     echo 'Importing n2c2 from XML to SQL'
-    pushd n2c22018t12sql
-    if clj -M -m n2c22018t12sql.core -a true -d ../data/train/ -j ${DBSTR}; then
+    pushd "${ROOTDIR}/n2c22018t12sql"
+    if clj -M -m n2c22018t12sql.core -a true -d "${DATA_DIR}/train/" -j ${DBSTR}; then
       echo 'Import complete'
+      popd
     else
       failsafe 'Import failed, exiting'
     fi
-    popd
   else
     echo 'Cleaning n2c2 tables'
     psql -h localhost -p 5432 -U ${USER} -d ${DBNAME} << "SQL"
@@ -146,7 +147,7 @@ function run_medcat {
   check_data_exists
   setup_db_con_str
   if [[ -z "${CLEAN}" ]]; then
-    pushd ann2sql
+    pushd "${ROOTDIR}/ann2sql"
     if clj -M -m ann2sql.core -s ${DBSTR} -d ${DBSTR} \
        -S documents \
        -D medcat \
@@ -154,10 +155,10 @@ function run_medcat {
        -c pat_id -c doc_id -c date -t text \
        --create-tables;  then
       echo 'MedCAT annotation succeeded'
+      popd
     else
       failsafe 'MedCAT annotation failed, exiting'
     fi
-    popd
   else
     echo 'Cleaning medcat tables'
     psql -h localhost -p 5432 -U ${USER} -d ${DBNAME} << "SQL"
@@ -169,7 +170,6 @@ SQL
 }
 
 function upload_ontology {
-  # TODO: Add switch for local db to utilise `LOAD GRAPH <file:///>`
   if [[ -f "$2" ]]; then
     if [[ -z "${SPARQL_LOAD_LOCAL}" ]]; then
       STATUS=$(curl "${SPARQL_ENDPOINT}?graph=$1" \
