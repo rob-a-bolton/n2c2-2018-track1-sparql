@@ -67,7 +67,6 @@ function failsafe {
 }
 
 function get_rmlmapper {
-  set -xv
   LATEST_VERSION="$(curl -so /dev/null -w '%{redirect_url}' 'https://github.com/RMLio/rmlmapper-java/releases/latest' | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')"
   RML_JAR=( ${ROOTDIR}/rmlmapper-${LATEST_VERSION}*.jar )
   if [[ ! -f ${RML_JAR} ]]; then
