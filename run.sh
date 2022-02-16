@@ -8,19 +8,34 @@ function print_usage {
   Args marked REQUIRED/<TAG> denotes the arg tag name.
   Actions specifying a tag need all args with this tag to be provided.
   Options:
-    -h          Print this help
-    -u          Specify the SQL username        REQUIRED/SQL
-    -p          Specify the SQL password        REQUIRED/SQL
-    -d          Specify the SQL database name   REQUIRED/SQL
-    -s          Specify the SPARQL endpoint     REQUIRED/SPARQL
-    -m          Specify the MedCATservice endpoint
-                  Default: http://127.0.0.1:5000/api/process_bulk
-    -c          Clean. Wipes data associated with an action.
-                Examples: 
-                  ./run.sh -c sql       Drop sql n2c2 tables
-                  ./run.sh -c medcat    Drop sql medcat annotation tables
-                  ./run.sh -c umls      Drop the UMLS RDF graphs
-                  ./run.sh -c rml       Drop the n2c2 RDF graphs
+    -h            Print this help
+    -u USER       Specify the SQL username        REQUIRED/SQL
+    -p PASS       Specify the SQL password        REQUIRED/SQL
+    -d DB         Specify the SQL database name   REQUIRED/SQL
+    -m URL        Specify the MedCATservice endpoint
+                    Default: http://127.0.0.1:5000/api/process_bulk
+
+    -o DIR        Specify the directory containing the ontology files
+                    Default: ./ontologies
+
+    -s URL        Specify the SPARQL endpoint     REQUIRED/SPARQL
+                    Provide the root database endpoint e.g.
+                        http://127.0.0.1:5820/mydb
+                    rather than
+                        http://127.0.0.1:5820/mydb/query
+
+    -a USER:PASS  Specify the username:password for SPARQL http basic auth
+
+    -l            Load ontologies from a local file using SPARQL update
+                  rather than the HTTP graph store protocol. Endpoint must
+                  support `file://` scheme in a LOAD to use this feature.
+
+    -c            Clean. Wipes data associated with an action.
+                  Examples: 
+                    ./run.sh -c sql       Drop sql n2c2 tables
+                    ./run.sh -c medcat    Drop sql medcat annotation tables
+                    ./run.sh -c umls      Drop the UMLS RDF graphs
+                    ./run.sh -c rml       Drop the n2c2 RDF graphs
 
   Tags following action show arg group needed.
   Actions:
@@ -34,6 +49,9 @@ function print_usage {
 }
 
 MEDCAT_ENDPOINT='http://127.0.0.1:5000/api/process_bulk'
+SPARQL_QUERY_HEADER='Content-Type: application/sparql-query'
+SPARQL_UPDATE_HEADER='Content-Type: application/sparql-update'
+ONTOLOGY_DIR='./ontologies'
 
 function cleanup {
   if [[ -f PGPASS ]]; then
@@ -42,7 +60,7 @@ function cleanup {
 }
 
 function failsafe {
-  echo "$1" >&2
+  echo -e "$1" >&2
   cleanup
   exit 1
 }
@@ -62,6 +80,43 @@ function setup_db_con_str {
   chmod 0600 PGPASS
   echo "localhost:5432:${DBNAME}:${USER}:${PASS}" > PGPASS
   export PGPASSFILE=PGPASS
+}
+
+function test_sparql_endpoints {
+  if [[ -z "${SPARQL_ENDPOINT}" ]]; then
+    failsafe 'No SPARQL endpoint provided'
+  fi
+
+  STATUS=$(curl "${SPARQL_ENDPOINT}/query" \
+    ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+    -H "${SPARQL_QUERY_HEADER}" \
+    -so /dev/null \
+    -w '%{http_code}' \
+    -d 'SELECT * FROM <http://127.0.0.254/> WHERE { ?a ?b ?c } LIMIT 0')
+
+  if [[ ${STATUS} -eq 415 ]]; then
+    failsafe "SPARQL query endpoint does not recognise ${SPARQL_QUERY_HEADER} content-type"
+  elif [[ ${STATUS} -eq 401 ]]; then
+    failsafe 'SPARQL query endpoint requires authorization, none provided'
+  elif [[ ${STATUS} -ne 200 ]]; then
+    failsafe "Unknown SPARQL error on query: ${STATUS}"
+  fi
+
+  STATUS=$(curl "${SPARQL_ENDPOINT}/update" \
+    ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+    -H "${SPARQL_UPDATE_HEADER}" \
+    -so /dev/null \
+    -w '%{http_code}' \
+    -d 'DROP SILENT GRAPH <http://127.0.0.254/>')
+
+  if [[ ${STATUS} -eq 415 ]]; then
+    failsafe "SPARQL update endpoint does not recognise ${SPARQL_UPDATE_HEADER} content-type"
+  elif [[ ${STATUS} -eq 401 ]]; then
+    failsafe 'SPARQL update endpoint requires authorization, none provided'
+  elif [[ ${STATUS} -ne 200 ]]; then
+    failsafe "Unknown SPARQL error on update: ${STATUS}"
+  fi
+
 }
 
 function run_sql {
@@ -113,7 +168,69 @@ SQL
   fi
 }
 
-while getopts ':hcu:p:d:m:s:' OPTION; do
+function upload_ontology {
+  # TODO: Add switch for local db to utilise `LOAD GRAPH <file:///>`
+  if [[ -f "$2" ]]; then
+    if [[ -z "${SPARQL_LOAD_LOCAL}" ]]; then
+      STATUS=$(curl "${SPARQL_ENDPOINT}?graph=$1" \
+          ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+          -so /dev/null \
+          -w '%{http_code}' \
+          -H 'Content-Type: text/turtle' \
+          -T ${2})
+      if [[ ${STATUS} -ne 200 ]]; then
+        failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}"
+      fi
+    else
+      FILE="$(readlink -f $2)"
+      STATUS=$(curl "${SPARQL_ENDPOINT}/update?graph=$1" \
+          ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+          -so /dev/null \
+          -w '%{http_code}' \
+          -H "${SPARQL_UPDATE_HEADER}" \
+          -d "LOAD <file://${FILE}> INTO GRAPH <${1}>")
+      if [[ ${STATUS} -eq 500 ]]; then
+        failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}\nCheck RDF store has access to ${ONTOLOGY_DIR}, as this is needed with LOAD <file://>"
+      elif [[ ${STATUS} -ne 200 ]]; then
+        failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}"
+      fi
+    fi
+  else
+    failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: file does not exist"
+  fi
+}
+
+function run_umls {
+  test_sparql_endpoints
+  if [[ -z "${CLEAN}" ]]; then
+    echo 'Uploading ontology documents'
+    echo -n 'STY... ' \
+      && upload_ontology 'http://purl.bioontology.org/ontology/STY/' \
+                         "${ONTOLOGY_DIR}/STY.ttl" \
+      && echo '✓'
+    echo -n 'SNOMEDCT... ' \
+      && upload_ontology 'http://purl.bioontology.org/ontology/SNOMEDCT/' \
+                         "${ONTOLOGY_DIR}/SNOMEDCT.ttl" \
+      && echo '✓'
+  else
+    echo 'Cleaning UMLS graphs'
+    STATUS=$(curl "${SPARQL_ENDPOINT}/update" \
+      ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+      -H "${SPARQL_UPDATE_HEADER}" \
+      -so /dev/null \
+      -w '%{http_code}' \
+      -d @- << SPARQL
+      DROP SILENT GRAPH <http://purl.bioontology.org/ontology/STY/>;
+      DROP SILENT GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/>
+SPARQL
+    )
+    if [[ ${STATUS} -ne 200 ]]; then
+      failsafe "Encountered error dropping UMLS graphs: $STATUS"
+    fi
+  fi
+}
+
+while getopts ':hlcu:p:d:m:o:s:a:' OPTION; do
   case ${OPTION} in
     h)
       print_usage
@@ -134,8 +251,17 @@ while getopts ':hcu:p:d:m:s:' OPTION; do
     m)
       MEDCAT_ENDPOINT=${OPTARG}
       ;;
+    o)
+      ONTOLOGY_DIR=${OPTARG}
+      ;;
     s)
       SPARQL_ENDPOINT=${OPTARG}
+      ;;
+    l)
+      SPARQL_LOAD_LOCAL=yes
+      ;;
+    a)
+      SPARQL_AUTH=${OPTARG}
       ;;
     ?)
       failsafe "Invalid option: -${OPTARG}"
@@ -151,6 +277,8 @@ elif [[ 'sql' == ${ACTION} ]]; then
   run_sql
 elif [[ 'medcat' == ${ACTION} ]]; then
   run_medcat
+elif [[ 'umls' == ${ACTION} ]]; then
+  run_umls
 else
   failsafe "Invalid action: ${ACTION}" >&2
 fi
