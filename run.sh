@@ -258,6 +258,10 @@ function run_rml {
          -u ${USER} \
          -p ${PASS}
     # Substitute "f" and "t" for "true" and "false"
+    # This is needed as XSD specifies only 4 values for xsd:boolean: "true", "false", "1", "0"
+    # Strict parsers may fail to parse e.g. "f"^^xsd:boolean
+    # This is known to be the case for at least Stardog
+    # https://www.w3.org/TR/xmlschema11-2/#boolean
     sed -i 's/"f"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/"false"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/g;s/"t"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/"true"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/g' ${ROOTDIR}/rml-output/n2c2-train.ttl
     echo 'Uploading RML output graph'
     upload_ontology 'https://n2c2.localhost/datasets/n2c2-train/' ${ROOTDIR}/rml-output/n2c2-train.ttl 
