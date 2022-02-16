@@ -1,0 +1,148 @@
+@base <https://n2c2.localhost/datasets/n2c2-train/> .
+@prefix dc: <http://purl.org/dc/elements/1.1/>.
+@prefix obo: <http://purl.obolibrary.org/obo/>.
+@prefix oboInOwl: <http://www.geneontology.org/formats/oboInOwl#>.
+@prefix n2c2: <https://n2c2.localhost/terminology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#>.
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix rr: <http://www.w3.org/ns/r2rml#>.
+@prefix rxnorm: <http://purl.bioontology.org/ontology/RXNORM/>.
+@prefix skos: <http://www.w3.org/2004/02/skos/core#>.
+@prefix snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>.
+@prefix umls: <https://identifiers.org/umls:>.
+@prefix vandf: <http://purl.bioontology.org/ontology/VANDF/>.
+
+<#PatientsMap> a rr:TriplesMap;
+  rr:logicalTable [ rr:tableName "annotations" ];
+  rr:subjectMap [
+    rr:template "https://n2c2.localhost/datasets/n2c2-train/{pat_id}";
+    rr:class snomed:116154003;
+  ];
+  rr:predicateObjectMap [
+    rr:predicate skos:notation;
+    rr:objectMap [ rr:column "pat_id"; rr:datatype xsd:integer ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_abdominal;
+    rr:objectMap [ rr:column "abdominal"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_advanced_cad;
+    rr:objectMap [ rr:column "advanced_cad"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_alcohol_abuse;
+    rr:objectMap [ rr:column "alcohol_abuse"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_asp_for_mi;
+    rr:objectMap [ rr:column "asp_for_mi"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_creatinine;
+    rr:objectMap [ rr:column "creatinine"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_dietsupp_2mos;
+    rr:objectMap [ rr:column "dietsupp_2mos"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_drug_abuse;
+    rr:objectMap [ rr:column "drug_abuse"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_english;
+    rr:objectMap [ rr:column "english"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_hba1c;
+    rr:objectMap [ rr:column "hba1c"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_keto_1yr;
+    rr:objectMap [ rr:column "keto_1yr"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_major_diabetes;
+    rr:objectMap [ rr:column "major_diabetes"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_makes_decisions;
+    rr:objectMap [ rr:column "makes_decisions"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:n2c2_mi_6mos;
+    rr:objectMap [ rr:column "mi_6mos"; rr:datatype xsd:boolean ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_document;
+    rr:objectMap [
+      rr:parentTriplesMap <#DocumentsMap>;
+      rr:joinCondition [
+        rr:child "pat_id";
+        rr:parent "pat_id";
+      ];
+    ];
+  ].
+
+<#DocumentsMap> a rr:TriplesMap;
+  rr:logicalTable [ rr:tableName "documents" ];
+  rr:subjectMap [
+    rr:template "https://n2c2.localhost/datasets/n2c2-train/{pat_id}_{doc_id}";
+    rr:class snomed:866145009;
+  ];
+  rr:predicateObjectMap [
+    rr:predicate skos:notation;
+    rr:objectMap [ rr:column "doc_id"; rr:datatype xsd:integer ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_date;
+    rr:objectMap [ rr:column "date"; rr:datatype xsd:dateTime ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_annotation;
+    rr:objectMap [
+      rr:parentTriplesMap <#AnnotationsMap>;
+      rr:joinCondition [
+        rr:child "pat_id";
+        rr:parent "pat_id";
+      ],
+      [
+        rr:child "doc_id";
+        rr:parent "doc_id";
+      ];
+      
+    ];
+  ].
+  
+<#AnnotationsMap> a rr:TriplesMap;
+  rr:logicalTable [ rr:tableName "medcat" ];
+  rr:subjectMap [
+    rr:template "https://n2c2.localhost/datasets/n2c2-train/{pat_id}_{doc_id}_{seq_id}";
+    rr:class snomed:900000000000519001;
+  ];
+  rr:predicateObjectMap [
+    rr:predicate skos:notation;
+    rr:objectMap [ rr:column "seq_id"; rr:datatype xsd:integer ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_cui;
+    rr:objectMap [ rr:column "cui"; rr:datatype xsd:string ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_source_value;
+    rr:objectMap [ rr:column "source_value"; rr:datatype xsd:string ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_ann_start;
+    rr:objectMap [ rr:column "m_start"; rr:datatype xsd:integer ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_ann_end;
+    rr:objectMap [ rr:column "m_end"; rr:datatype xsd:integer ];
+  ];
+  rr:predicateObjectMap [
+    rr:predicate n2c2:has_accuracy;
+    rr:objectMap [ rr:column "acc"; rr:datatype xsd:float ];
+  ].

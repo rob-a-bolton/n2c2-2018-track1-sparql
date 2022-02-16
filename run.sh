@@ -66,6 +66,21 @@ function failsafe {
   exit 1
 }
 
+function get_rmlmapper {
+  set -xv
+  LATEST_VERSION="$(curl -so /dev/null -w '%{redirect_url}' 'https://github.com/RMLio/rmlmapper-java/releases/latest' | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')"
+  RML_JAR=( ${ROOTDIR}/rmlmapper-${LATEST_VERSION}*.jar )
+  if [[ ! -f ${RML_JAR} ]]; then
+    JAR_LINK="$(curl -L 'https://github.com/RMLio/rmlmapper-java/releases/latest' | grep -o "href=\".*${LATEST_VERSION}.*.jar" | sed 's/href="/https:\/\/github.com/')"
+    pushd ${ROOTDIR}
+    if ! curl -OL "${JAR_LINK}"; then
+      failsafe "Could not download rmlmapper v${LATEST_VERSION}"
+    fi
+    popd
+    RML_JAR=( ${ROOTDIR}/rmlmapper-${LATEST_VERSION}*.jar )
+  fi
+}
+
 function check_data_exists {
   if ! [[ -d ${DATA_DIR}/train ]] || ! [[ -d ${DATA_DIR}/n2c2-t1_gold_standard_test_data/n2c2-t1_gold_standard_test_data/test ]]; then
     failsafe 'Could not locate n2c2 data, exiting'
@@ -230,6 +245,18 @@ SPARQL
   fi
 }
 
+function run_rml {
+  get_rmlmapper
+  setup_db_con_str
+  java -jar ${RML_JAR} \
+       -m ${ROOTDIR}/rml/n2c2-train.ttl \
+       -o ${ROOTDIR}/rml-output/n2c2-train.ttl \
+       -s turtle \
+       -dsn "jdbc:postgres://localhost/${DBNAME}" \
+       -u ${USER} \
+       -p ${PASS}
+}
+
 while getopts ':hlcu:p:d:m:o:s:a:' OPTION; do
   case ${OPTION} in
     h)
@@ -279,6 +306,8 @@ elif [[ 'medcat' == ${ACTION} ]]; then
   run_medcat
 elif [[ 'umls' == ${ACTION} ]]; then
   run_umls
+elif [[ 'rml' == ${ACTION} ]]; then
+  run_rml
 else
   failsafe "Invalid action: ${ACTION}" >&2
 fi
