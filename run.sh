@@ -427,6 +427,12 @@ elif [[ 'rml' == ${ACTION} ]]; then
   run_rml
 elif [[ 'sparql' == ${ACTION} ]]; then
   run_sparql
+elif [[ 'all' == ${ACTION} ]]; then
+  run_sql
+  run_medcat
+  run_umls
+  run_rml
+  run_sparql
 else
   failsafe "Invalid action: ${ACTION}" >&2
 fi
