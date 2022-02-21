@@ -8,6 +8,9 @@ function print_usage {
   Actions specifying a tag need all args with this tag to be provided.
   Options:
     -h            Print this help
+    -M MEM        Maximum memory for RML jvm process
+                  Passed via -Xmx <MEM>
+                  Recommended: 6G
     -u USER       Specify the SQL username        REQUIRED/SQL
     -p PASS       Specify the SQL password        REQUIRED/SQL
     -d DB         Specify the SQL database name   REQUIRED/SQL
@@ -50,8 +53,11 @@ function print_usage {
 MEDCAT_ENDPOINT='http://127.0.0.1:5000/api/process_bulk'
 SPARQL_QUERY_HEADER='Content-Type: application/sparql-query'
 SPARQL_UPDATE_HEADER='Content-Type: application/sparql-update'
+SPARQL_RESULTS_HEADER='Accept: application/sparql-results+json'
 ONTOLOGY_DIR="${ROOTDIR}/ontologies"
 DATA_DIR="${ROOTDIR}/data"
+JQ_STATUS_TRUE='(.results.bindings[] | select(.status.value | ascii_downcase | startswith("t")) | .total.value | tonumber) // 0'
+JQ_STATUS_FALSE='(.results.bindings[] | select(.status.value | ascii_downcase | startswith("f")) | .total.value | tonumber) // 0'
 
 function cleanup {
   if [[ -f PGPASS ]]; then
@@ -99,6 +105,8 @@ function setup_db_con_str {
 function test_sparql_endpoints {
   if [[ -z "${SPARQL_ENDPOINT}" ]]; then
     failsafe 'No SPARQL endpoint provided'
+  elif ! curl -so /dev/null -I "${SPARQL_ENDPOINT}"; then
+    failsafe 'Could not reach SPARQL endpoint, check server/port is accessible'
   fi
 
   STATUS=$(curl "${SPARQL_ENDPOINT}/query" \
@@ -131,6 +139,74 @@ function test_sparql_endpoints {
     failsafe "Unknown SPARQL error on update: ${STATUS}"
   fi
 
+}
+
+function sparql_search {
+  curl "${SPARQL_ENDPOINT}/query" \
+       ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+       -H "${SPARQL_QUERY_HEADER}" \
+       -H "${SPARQL_RESULTS_HEADER}" \
+       -so ${2} \
+       --data-binary "@${1}"
+}
+
+function do_sparql_f1 {
+  SPARQL_ROOT=${ROOTDIR}/sparql/n2c2
+  echo 'Running n2c2 tests...'
+  for TEST_DIR in ${SPARQL_ROOT}/*; do
+    echo -n "  $(basename ${TEST_DIR})..."
+    sparql_search "${TEST_DIR}/search.rq" ${TEST_DIR}/search.json
+    sparql_search "${TEST_DIR}/total.rq" ${TEST_DIR}/total.json
+    echo "✓"
+  done
+  for TEST_DIR in ${SPARQL_ROOT}/*; do
+    true_positive="$(jq "$JQ_STATUS_TRUE" < ${TEST_DIR}/search.json)"
+    false_positive="$(jq "$JQ_STATUS_FALSE" < ${TEST_DIR}/search.json)"
+    actual_positive="$(jq "$JQ_STATUS_TRUE" < ${TEST_DIR}/total.json)"
+    actual_negative="$(jq "$JQ_STATUS_FALSE" < ${TEST_DIR}/total.json)"
+
+    # Total predicted positive = true_pos + false_pos
+    # Total predicted negative = 202 - (true_pos + false_pos)
+    #  (202 total patients in n2c2 train set)
+    # False negative = actual_pos - true_pos
+    # True negative = actual_neg - false_pos
+
+
+    # precision = TP/(TP + FP)
+    # recall = TP/(TP+FN)
+    # F1 = 2 * (precision * recall) / (precision + recall)
+    # So needed: TP, FP, FN
+    # st - true positive
+    # sT - true negative
+    # sf - false positive
+    # sF - false negative
+    cmd="\
+    10k \
+    $true_positive st \
+    $actual_negative $false_positive - sT \
+    $false_positive sf \
+    $actual_positive $true_positive - sF \
+    lt lt lf + / sp \
+    lt lt lF + / sr \
+    2 lp lr * lp lr + / * s1 \
+    lT p \
+    lF p \
+    lp p \
+    lr p \
+    l1 p \
+    "
+
+    # tests with no found positives will cause issue via division by 0, ignore this
+    # (it will be obvious in table readout, no need for printing dc error too)
+    calcs=$(echo "$cmd" | dc 2>/dev/null | tr '\n' '\t')
+    true_negative=$(cut -f 1 <<< "$calcs")
+    false_negative=$(cut -f 2 <<< "$calcs")
+    precision=$(cut -f 3 <<< "$calcs")
+    recall=$(cut -f 4 <<< "$calcs")
+    f1=$(cut -f 5 <<< "$calcs")
+
+    echo "|$(basename ${TEST_DIR}) |${true_positive} |${true_negative} |${false_positive} |${false_negative} |${precision} |${recall} |${f1}"
+  done
 }
 
 function run_sql {
@@ -183,34 +259,40 @@ SQL
 }
 
 function upload_ontology {
-  if [[ -f "$2" ]]; then
-    if [[ -z "${SPARQL_LOAD_LOCAL}" ]]; then
-      STATUS=$(curl "${SPARQL_ENDPOINT}?graph=$1" \
-          ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
-          -so /dev/null \
-          -w '%{http_code}' \
-          -H 'Content-Type: text/turtle' \
-          -T ${2})
-      if [[ ${STATUS} -ne 200 ]]; then
-        failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}"
-      fi
-    else
-      FILE="$(readlink -f $2)"
-      STATUS=$(curl "${SPARQL_ENDPOINT}/update?graph=$1" \
-          ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
-          -so /dev/null \
-          -w '%{http_code}' \
-          -H "${SPARQL_UPDATE_HEADER}" \
-          -d "LOAD <file://${FILE}> INTO GRAPH <${1}>")
-      if [[ ${STATUS} -eq 500 ]]; then
-        failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}\nCheck RDF store has access to ${ONTOLOGY_DIR}, as this is needed with LOAD <file://>"
-      elif [[ ${STATUS} -ne 200 ]]; then
-        failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}"
-      fi
-    fi
-  else
+  if [[ ! -f "$2" ]]; then
     failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: file does not exist"
   fi
+  if [[ -z "${SPARQL_LOAD_LOCAL}" ]]; then
+    # Why do we use 'filename=', even though this path param is not needed?
+    # When using -T curl decides to add the filename to the path if the path ends in /
+    # So specifying ?graph=http://foo.com/ontologies/ONT/
+    # Will "helpfully" be changed to ?graph=http://foo.com/ontologies/ONT/ONT.ttl
+    # :)
+    FNAME="$(basename ${2})"
+    STATUS=$(curl "${SPARQL_ENDPOINT}?graph=$1&filename=${FNAME}" \
+        ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+        -so /dev/null \
+        -w '%{http_code}' \
+        -H 'Content-Type: text/turtle' \
+        -T ${2})
+    if [[ ${STATUS} -ne 200 && ${STATUS} -ne 201 ]]; then
+      failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}"
+    fi
+  else
+    FILE="$(readlink -f $2)"
+    STATUS=$(curl "${SPARQL_ENDPOINT}/update?graph=$1" \
+        ${SPARQL_AUTH:+ -u "${SPARQL_AUTH}"} \
+        -so /dev/null \
+        -w '%{http_code}' \
+        -H "${SPARQL_UPDATE_HEADER}" \
+        -d "LOAD <file://${FILE}> INTO GRAPH <${1}>")
+    if [[ ${STATUS} -eq 500 ]]; then
+      failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}\nCheck RDF store has access to ${ONTOLOGY_DIR}, as this is needed with LOAD <file://>"
+    elif [[ ${STATUS} -ne 200 && ${STATUS} -ne 201 ]]; then
+      failsafe "❌\nError uploading file $2 to graph <$1> on endpoint ${SPARQL_ENDPOINT}: ${STATUS}"
+    fi
+  fi
+  echo '✓'
 }
 
 function run_umls {
@@ -219,12 +301,10 @@ function run_umls {
     echo 'Uploading ontology documents'
     echo -n 'STY... ' \
       && upload_ontology 'http://purl.bioontology.org/ontology/STY/' \
-                         "${ONTOLOGY_DIR}/STY.ttl" \
-      && echo '✓'
+                         "${ONTOLOGY_DIR}/STY.ttl"
     echo -n 'SNOMEDCT... ' \
       && upload_ontology 'http://purl.bioontology.org/ontology/SNOMEDCT/' \
-                         "${ONTOLOGY_DIR}/SNOMEDCT.ttl" \
-      && echo '✓'
+                         "${ONTOLOGY_DIR}/SNOMEDCT.ttl"
   else
     echo 'Cleaning UMLS graphs'
     STATUS=$(curl "${SPARQL_ENDPOINT}/update" \
@@ -249,20 +329,24 @@ function run_rml {
     get_rmlmapper
     setup_db_con_str
     echo 'Running RML export'
-    java -jar ${RML_JAR} \
+    java ${MAX_MEM:+ -Xmx"${MAX_MEM}"} \
+         -jar ${RML_JAR} \
          -m ${ROOTDIR}/rml/n2c2-train.ttl \
          -o ${ROOTDIR}/rml-output/n2c2-train.ttl \
          -s turtle \
          -dsn "jdbc:postgres://localhost/${DBNAME}" \
          -u ${USER} \
          -p ${PASS}
+    if [[ $? -ne 0 ]]; then
+      failsafe 'Error running RML export'
+    fi
     # Substitute "f" and "t" for "true" and "false"
     # This is needed as XSD specifies only 4 values for xsd:boolean: "true", "false", "1", "0"
     # Strict parsers may fail to parse e.g. "f"^^xsd:boolean
     # This is known to be the case for at least Stardog
     # https://www.w3.org/TR/xmlschema11-2/#boolean
     sed -i 's/"f"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/"false"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/g;s/"t"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/"true"^^<http:\/\/www.w3.org\/2001\/XMLSchema#boolean>/g' ${ROOTDIR}/rml-output/n2c2-train.ttl
-    echo 'Uploading RML output graph'
+    echo -n 'Uploading RML output graph... '
     upload_ontology 'https://n2c2.localhost/datasets/n2c2-train/' ${ROOTDIR}/rml-output/n2c2-train.ttl 
   else
     if [[ -f ${ROOTDIR}/rml-output/n2c2-train.ttl ]]; then
@@ -282,7 +366,12 @@ function run_rml {
   fi
 }
 
-while getopts ':hlcu:p:d:m:o:s:a:' OPTION; do
+function run_sparql {
+  test_sparql_endpoints
+  do_sparql_f1
+}
+
+while getopts ':hlcM:u:p:d:m:o:s:a:' OPTION; do
   case ${OPTION} in
     h)
       print_usage
@@ -290,6 +379,9 @@ while getopts ':hlcu:p:d:m:o:s:a:' OPTION; do
       ;;
     c)
       CLEAN=yes
+      ;;
+    M)
+      MAX_MEM=${OPTARG}
       ;;
     u)
       USER=${OPTARG}
@@ -333,6 +425,8 @@ elif [[ 'umls' == ${ACTION} ]]; then
   run_umls
 elif [[ 'rml' == ${ACTION} ]]; then
   run_rml
+elif [[ 'sparql' == ${ACTION} ]]; then
+  run_sparql
 else
   failsafe "Invalid action: ${ACTION}" >&2
 fi
