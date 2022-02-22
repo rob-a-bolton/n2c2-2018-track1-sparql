@@ -159,7 +159,7 @@ function do_sparql_f1 {
     sparql_search "${TEST_DIR}/total.rq" ${TEST_DIR}/total.json
     echo "✓"
   done
-  echo '|Criteria        |TP  |TN  |FP |FN |Precision    |Recall       |F1'
+  echo '|Criteria |TP |TN |FP |FN |Precision |Recall |F1'
   for TEST_DIR in ${SPARQL_ROOT}/*; do
     true_positive="$(jq "$JQ_STATUS_TRUE" < ${TEST_DIR}/search.json)"
     false_positive="$(jq "$JQ_STATUS_FALSE" < ${TEST_DIR}/search.json)"
