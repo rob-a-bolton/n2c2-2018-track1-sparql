@@ -159,6 +159,7 @@ function do_sparql_f1 {
     sparql_search "${TEST_DIR}/total.rq" ${TEST_DIR}/total.json
     echo "✓"
   done
+  echo '|Criteria        |TP  |TN  |FP |FN |Precision    |Recall       |F1'
   for TEST_DIR in ${SPARQL_ROOT}/*; do
     true_positive="$(jq "$JQ_STATUS_TRUE" < ${TEST_DIR}/search.json)"
     false_positive="$(jq "$JQ_STATUS_FALSE" < ${TEST_DIR}/search.json)"
@@ -204,7 +205,6 @@ function do_sparql_f1 {
     precision=$(cut -f 3 <<< "$calcs")
     recall=$(cut -f 4 <<< "$calcs")
     f1=$(cut -f 5 <<< "$calcs")
-
     echo "|$(basename ${TEST_DIR}) |${true_positive} |${true_negative} |${false_positive} |${false_negative} |${precision} |${recall} |${f1}"
   done
 }
