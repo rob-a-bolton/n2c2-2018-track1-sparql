@@ -85,3 +85,47 @@ The `-M` option is passed directly to the java command line used to start the RM
 e.g. `./run.sh -M 8G rml` would run `java -Xmx8G -jar rmlmapper.jar`  
 At the time of writing this documentation it was found that 6G was enough to perform the export.  
 Running `all` the steps in one go will likely require a lot of memory as MedCATservice will and the RDF store will both consume a large amount of memory while they run.
+
+Example running the `all` step providing all required options and some optional ones:  
+```sh
+./run.sh -u annotations -p vf-6896f -d pipeline-test \
+         -m 'http://127.0.0.1:5000/api/process_bulk' \
+         -s 'http://127.0.0.1:5820/pipeline-test' -a 'admin:admin' \
+         -M 6G \
+         all
+```
+It is best to quote URLs and usernames/passwords to prevent shell capture and interpretation of special characters.  
+
+
+Example running the final SPARQL stage and showing the results presented by the tool:
+```sh
+./run.sh pipeline-test -s 'http://127.0.0.1:5820/pipeline-test' -a admin:admin sparql
+Running n2c2 tests...
+  abdominal...✓
+  advanced-cad...✓
+  alcohol-abuse...✓
+  asp-for-mi...✓
+  creatinine...✓
+  dietsupp-2mos...✓
+  drug-abuse...✓
+  english...✓
+  hba1c...✓
+  keto-1yr...✓
+  major-diabetes...✓
+  makes-decisions...✓
+  mi-6mos...✓
+|Criteria |TP |TN |FP |FN |Precision |Recall |F1
+|abdominal |66 |100 |25 |11 |.7252747252 |.8571428571 |.7857142856
+|advanced-cad |107 |49 |28 |18 |.7925925925 |.8560000000 |.8230769228
+|alcohol-abuse |5 |188 |7 |2 |.4166666666 |.7142857142 |.5263157892
+|asp-for-mi |86 |33 |7 |76 |.9247311827 |.5308641975 |.6745098038
+|creatinine |70 |68 |52 |12 |.5737704918 |.8536585365 |.6862745096
+|dietsupp-2mos |96 |26 |71 |9 |.5748502994 |.9142857142 |.7058823528
+|drug-abuse |10 |178 |12 |2 |.4545454545 |.8333333333 |.5882352940
+|english |192 |0 |10 |0 |.9504950495 |1.0000000000 |.9746192892
+|hba1c |1 |133 |2 |66 |.3333333333 |.0149253731 |.0285714280
+|keto-1yr |0 |196 |5 |1 |0 |0 |0
+|major-diabetes |93 |57 |32 |20 |.7440000000 |.8230088495 |.7815126048
+|makes-decisions |7 |187 |7 |1 |.5000000000 |.8750000000 |.6363636362
+|mi-6mos |10 |117 |67 |8 |.1298701298 |.5555555555 |.2105263156
+```
