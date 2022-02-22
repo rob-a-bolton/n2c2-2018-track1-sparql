@@ -1,0 +1,31 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT ?status (count(distinct ?patient) AS ?total)
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+WHERE {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+      {
+        # [ rdfs:subClassOf* snomed:301095005; umls:has_cui ?cui ] # CAD
+        # 301095005 # Cardiac finding
+        # 53741008 # CAD
+        [ rdfs:subClassOf* snomed:22298006; # MI
+          umls:has_cui ?cui ]
+        # [ rdfs:subClassOf* snomed:22298006; # MI finding
+        #   snomed:associated_finding_of* [ umls:has_cui ?cui ] ]
+      } 
+    }
+    ?patient a snomed:116154003;
+             n2c2:n2c2_mi_6mos ?status;
+             n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui
+            #  n2c2:has_document/n2c2:has_annotation/n2c2:has_cui "C0184666" # Hospitalisation
+             .
+            #  n2c2:has_document/n2c2:has_annotation/n2c2:has_cui "C0439231".
+} GROUP BY ?status

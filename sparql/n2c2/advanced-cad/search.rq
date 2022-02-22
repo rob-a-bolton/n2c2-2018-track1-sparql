@@ -1,0 +1,71 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT ?status (count(?patient) AS ?total)
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+WHERE {
+  SELECT DISTINCT ?patient ?status {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+      [ rdfs:subClassOf* snomed:53741008; umls:has_cui ?cui ] # Coronary arteriosclerosis (CAD)
+    }
+    ?patient a snomed:116154003;
+            n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui;
+            n2c2:n2c2_advanced_cad ?status.
+  }
+} GROUP BY ?status
+
+
+
+# PREFIX umls: <https://identifiers.org/umls:>
+# PREFIX n2c2: <https://n2c2.localhost/terminology#>
+# PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+# PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+# PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+# PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+# PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+# PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+# SELECT ?status (count(?patient) AS ?total)
+# FROM <https://n2c2.localhost/datasets/n2c2-train/>
+# FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+# WHERE {
+#   SELECT DISTINCT ?patient ?status {
+#     GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+#       # {
+#       #  [ rdfs:subClassOf* snomed:53741008; umls:has_cui ?cui ] # Coronary arteriosclerosis (CAD)
+#       # }
+#       # UNION
+#       { 
+#         [ rdfs:subClassOf* snomed:4557003; umls:has_cui ?cui ] # pre-MI syndrome
+#       }
+#       UNION
+#       {
+#         [ rdfs:subClassOf* snomed:60234000; umls:has_cui ?cui ] # Aortic Incompetence
+#       }
+#       UNION
+#       {
+#         [ rdfs:subClassOf* snomed:48867003; umls:has_cui ?cui ] # Bradycardia
+#       }
+#       UNION
+#       {
+#         [ rdfs:subClassOf* snomed:270492004; umls:has_cui ?cui ] # atroventricular block
+#       }
+#       UNION
+#       {
+#         [ rdfs:subClassOf* snomed:45211000; umls:has_cui ?cui ] # atroventricular block
+#       }
+#     }
+#     ?patient a snomed:116154003;
+#             n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui;
+#             n2c2:n2c2_advanced_cad ?status.
+#   }
+# } GROUP BY ?status
+
+# # work on query to define 5 categories, uniquely grab patients with 0/1 for category, COUNT(categoryA + ...) and HAVING(?score > 1)

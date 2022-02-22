@@ -1,0 +1,17 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT ?status (count(?patient) AS ?total)
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+WHERE {
+  select distinct ?patient ?status {
+    ?patient a snomed:116154003;
+             n2c2:n2c2_major_diabetes ?status.
+  }
+} GROUP BY ?status

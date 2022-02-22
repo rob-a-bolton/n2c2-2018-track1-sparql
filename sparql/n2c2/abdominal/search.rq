@@ -1,0 +1,39 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT ?status (count(?patient) AS ?total)
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+WHERE {
+  SELECT DISTINCT ?patient ?status {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+      {
+        ?_ rdfs:subClassOf* snomed:281255004; # Small bowel obstruction
+          umls:has_cui ?cui.
+      }
+      UNION
+      {
+        ?_ rdfs:subClassOf* snomed:31521004; # Resection of intestine
+          umls:has_cui ?cui.
+      }
+      UNION
+      {
+        ?surgery rdfs:subClassOf* snomed:129284003. # Surgery
+        ?abdomen rdfs:subClassOf* snomed:818983003.
+        ?_ snomed:has_direct_procedure_site ?abdomen;
+          snomed:has_method ?surgery;
+          umls:has_cui ?cui.
+      }
+    }
+    
+    ?patient a snomed:116154003;
+             n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui;
+             n2c2:n2c2_abdominal ?status.
+  }
+} GROUP BY ?status

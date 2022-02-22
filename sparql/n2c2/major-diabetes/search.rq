@@ -1,0 +1,66 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT ?status (count(distinct ?patient) AS ?total)
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+WHERE {
+  {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+      [ rdfs:subClassOf* snomed:73211009; # Diabetes
+        umls:has_cui ?cui ]
+    }
+     ?patient a snomed:116154003;
+           n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui;
+  }
+  {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+      {
+        [ snomed:due_to snomed:73211009;
+          umls:has_cui ?ecui ]
+      }
+      UNION
+      { # 42:6 -> 44:7
+        [ rdfs:subClassOf* snomed:81723002; # Amputation
+          umls:has_cui ?ecui ]
+      }
+      UNION
+      { # 42:6 -> 85:22
+        [ snomed:has_finding_site snomed:64033007; # Kidney
+          umls:has_cui ?ecui ]
+      }
+      # UNION
+      # { # 42:6 -> 107:68
+      #   [ rdfs:subClassOf* snomed:80659006; # Skin condition
+      #     #snomed:has_finding_site snomed:39937001; # Skin
+      #     umls:has_cui ?ecui ]
+      # }
+      UNION
+      { # 42:6 -> 42:6
+        [ skos:prefLabel ?l;
+          umls:has_cui ?ecui ]
+          FILTER(STRSTARTS(?l, "Retinopathy"))
+      }
+      UNION
+      { # 42:6 -> 43:7
+        [ rdfs:subClassOf* snomed:236514003; # Nephropathy
+          umls:has_cui ?ecui ]
+      }
+      UNION
+      { # 42:6 -> 71:20
+        [ rdfs:subClassOf* snomed:386033004; # Neuropathy
+          umls:has_cui ?ecui ]
+      }
+    }
+     ?patient a snomed:116154003;
+           n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?ecui;
+  }
+  ?patient n2c2:n2c2_major_diabetes ?status.
+}
+GROUP BY ?status

@@ -1,0 +1,51 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT (!?st AS ?status) (count(distinct ?patient) AS ?total)
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+WHERE {
+  ?patient a snomed:116154003;
+           n2c2:n2c2_makes_decisions ?st.
+  {
+    {
+      GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+        [ rdfs:subClassOf* snomed:286933003; # Confusion
+          umls:has_cui ?confusion ]
+      }
+      ?patient n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?confusion.
+    }
+    {
+      GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+        [ rdfs:subClassOf* snomed:52448006; # Dementia, 4:18
+          umls:has_cui ?cui ]
+      }
+      ?patient n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui.
+    }
+  }
+  UNION
+  {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+      {
+        [ rdfs:subClassOf* snomed:394619001; # Legal guardian
+          umls:has_cui ?cui ]
+      }
+      UNION
+      {
+        [ rdfs:subClassOf* snomed:419284004; # Altered mental state
+          umls:has_cui ?cui ]
+      }
+    }
+     
+    ?patient n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui.
+  }
+}
+GROUP BY ?st
+
+# 110359009 MR

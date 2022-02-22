@@ -1,0 +1,32 @@
+PREFIX umls: <https://identifiers.org/umls:>
+PREFIX n2c2: <https://n2c2.localhost/terminology#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX snomed: <http://purl.bioontology.org/ontology/SNOMEDCT/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX train: <https://n2c2.localhost/datasets/n2c2-train/>
+
+SELECT ?status (count(distinct ?patient) AS ?total)
+#SELECT DISTINCT ?patient ?status ?cui ?label
+FROM <https://n2c2.localhost/datasets/n2c2-train/>
+FROM NAMED <http://purl.bioontology.org/ontology/SNOMEDCT/>
+WHERE {
+    GRAPH <http://purl.bioontology.org/ontology/SNOMEDCT/> {
+        {
+            ?_ rdfs:subClassOf* snomed:15167005; # Alcohol abuse
+               skos:prefLabel ?label;
+               umls:has_cui ?cui.
+        }
+        UNION
+        {
+            ?_ rdfs:subClassOf* snomed:228322009; # Drinking episode
+               skos:prefLabel ?label;
+               umls:has_cui ?cui.
+        }
+    }
+    ?patient a snomed:116154003;
+    		     n2c2:has_document/n2c2:has_annotation/n2c2:has_cui ?cui;
+             n2c2:n2c2_alcohol_abuse ?status.
+}
+GROUP BY ?status
